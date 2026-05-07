@@ -1,0 +1,16 @@
+services:
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  backend:
+    env_file:
+      - .env.ec2
+    restart: unless-stopped
+
+  frontend:
+    env_file:
+      - .env.ec2
+    restart: unless-stopped

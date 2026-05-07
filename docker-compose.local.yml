@@ -1,0 +1,49 @@
+services:
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: msp_localstack
+    environment:
+      SERVICES: s3,secretsmanager,lambda,dynamodb,glue,iam,sts,logs
+      DEBUG: "0"
+      LAMBDA_EXECUTOR: local
+      DEFAULT_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      PERSISTENCE: "1"
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./infra/localstack/init:/etc/localstack/init/ready.d
+      - ./backend/lambdas:/var/lambdas:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks:
+      - msp_net
+
+  backend:
+    env_file:
+      - .env.local
+    command: ["sh", "-c", "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+    volumes:
+      - ./backend:/app
+      - ${HOME}/.aws:/root/.aws:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  frontend:
+    env_file:
+      - .env.local
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
