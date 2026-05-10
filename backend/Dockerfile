@@ -12,7 +12,8 @@ RUN apt-get update \
     && pip install --no-cache-dir uv
 
 COPY pyproject.toml ./
-RUN uv pip install --system -r pyproject.toml
+RUN uv pip install --system -r pyproject.toml \
+    && uv pip install --system pytest pytest-asyncio pytest-mock
 
 COPY . .
 

@@ -14,6 +14,7 @@ from app.api.v1 import (
     reports,
 )
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 
 
 @asynccontextmanager
@@ -30,6 +31,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_exception_handlers(app)
 
 
 @app.get("/health")

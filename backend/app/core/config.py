@@ -56,4 +56,4 @@ class Settings(BaseSettings):
         return v
 
 
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue]  # values come from env at runtime

@@ -21,9 +21,30 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-mock>=3.14",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["app", "lambdas"]
+exclude = ["**/__pycache__", "alembic/versions", ".venv"]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+pythonVersion = "3.14"
