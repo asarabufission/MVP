@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Table, type Column } from "@/components/ui/Table";
 import { useDashboardSummary } from "@/hooks/useDashboard";
 import { cn } from "@/lib/cn";
+import { formatDateTime } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import type { RecentActivityItem } from "@/types/api";
 
@@ -50,17 +51,6 @@ function StatCard({ icon: Icon, label, value, to }: StatCardProps) {
       </div>
     </button>
   );
-}
-
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 const ACTIVITY_COLUMNS: Column<RecentActivityItem>[] = [

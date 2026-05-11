@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, ForeignKey, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,7 +9,10 @@ from app.db.base import Base, TimestampMixin
 
 class Client(Base, TimestampMixin):
     __tablename__ = "clients"
-    __table_args__ = (UniqueConstraint("msp_id", "name", name="uq_clients_msp_name"),)
+    __table_args__ = (
+        UniqueConstraint("msp_id", "name", name="uq_clients_msp_name"),
+        CheckConstraint("status IN ('ACTIVE','INACTIVE')", name="ck_clients_status"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -29,4 +32,9 @@ class Client(Base, TimestampMixin):
         String(20),
         nullable=False,
         server_default=text("'NEEDS_SETUP'"),
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default=text("'ACTIVE'"),
     )

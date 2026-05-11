@@ -50,3 +50,64 @@ export interface DashboardSummary {
   failedRuns: FailedRunItem[];
   recentActivity: RecentActivityItem[];
 }
+
+export type Readiness = "READY" | "NEEDS_SETUP" | "DEGRADED";
+export type AssignmentStatus = "ACTIVE" | "INACTIVE";
+export type DatasourceCategory = "LICENSING" | "ENDPOINT" | "RECONCILIATION";
+
+export interface ClientListItem {
+  id: string;
+  name: string;
+  description: string | null;
+  defaultIdentifierType: string;
+  defaultIdentifierValue: string;
+  readiness: Readiness;
+  assignedCount: number;
+  billingSourceName: string | null;
+  identityAnchorName: string | null;
+  createdAt: string;
+}
+
+export interface ClientListResponse {
+  items: ClientListItem[];
+  nextCursor: string | null;
+  totalCount: number;
+}
+
+export interface ClientAssignment {
+  id: string;
+  datasourceId: string;
+  datasourceName: string;
+  category: DatasourceCategory;
+  sourceType: string;
+  scope: string;
+  datasourceStatus: string;
+  isBillingSource: boolean;
+  isIdentityAnchor: boolean;
+  identifierType: string | null;
+  identifierValue: string | null;
+  effectiveIdentifierType: string;
+  effectiveIdentifierValue: string;
+  status: AssignmentStatus;
+  assignedAt: string;
+  inactivatedAt: string | null;
+}
+
+export interface ClientDetail extends ClientListItem {
+  updatedAt: string;
+  assignments: ClientAssignment[];
+}
+
+export interface ClientCreateBody {
+  name: string;
+  description?: string | null;
+  defaultIdentifierType: string;
+  defaultIdentifierValue: string;
+}
+
+export type ClientPatchBody = Partial<ClientCreateBody>;
+
+export interface IdentifierOverrideBody {
+  identifierType: string;
+  identifierValue: string;
+}

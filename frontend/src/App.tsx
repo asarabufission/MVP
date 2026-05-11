@@ -9,39 +9,24 @@ import {
 } from "react-router-dom";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AppShell } from "@/components/layout/AppShell";
 import { IdleSessionModal } from "@/components/modals/IdleSessionModal";
 import { LogoutConfirmModal } from "@/components/modals/LogoutConfirmModal";
-import { useIdleTimer } from "@/hooks/useIdleTimer";
 import { queryClient } from "@/lib/queryClient";
+import { ClientDetailPage } from "@/pages/ClientDetailPage";
+import { ClientsPage } from "@/pages/ClientsPage";
+import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
 
 function PlaceholderPage({ title }: { title: string }) {
-  const user = useAuthStore((s) => s.user);
-  const setLogoutOpen = useUiStore((s) => s.setLogoutConfirmOpen);
   return (
-    <div className="min-h-screen bg-bg p-8 font-sans text-text">
-      <div className="mx-auto max-w-3xl">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">{title}</h1>
-          <button
-            type="button"
-            onClick={() => setLogoutOpen(true)}
-            className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-text"
-          >
-            Logout
-          </button>
-        </div>
-        {user && (
-          <p className="mt-3 text-sm text-muted">
-            Signed in as {user.email} ({user.role})
-          </p>
-        )}
-        <p className="mt-6 text-sm text-dim">
-          Phase 2 placeholder. Real dashboard ships in Phase 5.
-        </p>
-      </div>
+    <div className="space-y-3">
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <p className="text-sm text-muted">
+        This page lands in a later phase. Use the sidebar to navigate.
+      </p>
     </div>
   );
 }
@@ -90,12 +75,6 @@ function Toaster() {
   );
 }
 
-function AuthedShell({ children }: { children: React.ReactNode }) {
-  const setIdleOpen = useUiStore((s) => s.setIdleModalOpen);
-  useIdleTimer({ onTimeout: () => setIdleOpen(true) });
-  return <>{children}</>;
-}
-
 function RootRedirect() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />;
@@ -109,6 +88,14 @@ function ScrollToTop() {
   return null;
 }
 
+function ProtectedShell() {
+  return (
+    <ProtectedRoute>
+      <AppShell />
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -117,16 +104,39 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forbidden" element={<ForbiddenPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <AuthedShell>
-                  <PlaceholderPage title="Dashboard" />
-                </AuthedShell>
-              </ProtectedRoute>
-            }
-          />
+          <Route element={<ProtectedShell />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/clients/:id" element={<ClientDetailPage />} />
+            <Route
+              path="/datasources"
+              element={<PlaceholderPage title="Datasources" />}
+            />
+            <Route
+              path="/datasources/add"
+              element={<PlaceholderPage title="Add Datasource" />}
+            />
+            <Route
+              path="/client-source-mapping"
+              element={<PlaceholderPage title="Client Source Mapping" />}
+            />
+            <Route
+              path="/reports"
+              element={<PlaceholderPage title="Reports" />}
+            />
+            <Route
+              path="/reports/history"
+              element={<PlaceholderPage title="Reports History" />}
+            />
+            <Route
+              path="/job-runs"
+              element={<PlaceholderPage title="Job Runs" />}
+            />
+            <Route
+              path="/settings"
+              element={<PlaceholderPage title="Settings" />}
+            />
+          </Route>
           <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<RootRedirect />} />
         </Routes>

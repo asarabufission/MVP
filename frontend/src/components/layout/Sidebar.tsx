@@ -7,15 +7,12 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   Settings as SettingsIcon,
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 
-import { RoleGuard } from "@/components/RoleGuard";
-import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -41,7 +38,6 @@ export function Sidebar() {
   const toggle = useUiStore((s) => s.toggleSidebar);
   const setLogoutOpen = useUiStore((s) => s.setLogoutConfirmOpen);
   const user = useAuthStore((s) => s.user);
-  const navigate = useNavigate();
 
   return (
     <aside
@@ -82,34 +78,6 @@ export function Sidebar() {
           )}
         </button>
       </div>
-
-      {/* Admin CTA */}
-      <RoleGuard role="MSP_ADMIN">
-        <div className="border-b border-border p-3">
-          {collapsed ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate("/datasources/add")}
-              className="w-full p-0"
-              title="Add Datasource"
-              aria-label="Add Datasource"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate("/datasources/add")}
-              leftIcon={<Plus className="h-4 w-4" />}
-              className="w-full"
-            >
-              Add Datasource
-            </Button>
-          )}
-        </div>
-      </RoleGuard>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">

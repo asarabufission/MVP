@@ -193,6 +193,12 @@ class ActivationBackgroundFailedError(AppError):
     default_detail = "Background activation failed"
 
 
+class InvalidCursorError(AppError):
+    status_code = 400
+    code = "INVALID_CURSOR"
+    default_detail = "Pagination cursor is invalid"
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error_handler(_: Request, exc: AppError) -> JSONResponse:
