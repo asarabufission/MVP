@@ -56,7 +56,9 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ) -> LoginResponse:
     user = await authenticate(db, payload.username, payload.password)
-    access_token, refresh_token, _, _ = issue_token_pair(user)
+    access_token, refresh_token, _, _ = issue_token_pair(
+        user, remember_me=payload.remember_me
+    )
     await record_login(
         db,
         user=user,

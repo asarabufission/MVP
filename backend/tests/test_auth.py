@@ -2,8 +2,10 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from jose import jwt
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.security import hash_token
 from app.db.session import AsyncSessionLocal
 from app.models.login_history import LoginHistory
@@ -145,3 +147,39 @@ async def test_me_with_garbage_token(client: AsyncClient) -> None:
     )
     assert resp.status_code == 401
     assert resp.json()["code"] == "TOKEN_EXPIRED"
+
+
+async def test_remember_me_extends_refresh_ttl(client: AsyncClient) -> None:
+    def _refresh_ttl_days(token: str) -> float:
+        payload = jwt.decode(
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+        )
+        return (payload["exp"] - payload["iat"]) / 86400
+
+    short = (
+        await client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": ADMIN_USERNAME,
+                "password": ADMIN_PASSWORD,
+                "rememberMe": False,
+            },
+        )
+    ).json()
+    long = (
+        await client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": ADMIN_USERNAME,
+                "password": ADMIN_PASSWORD,
+                "rememberMe": True,
+            },
+        )
+    ).json()
+
+    short_days = _refresh_ttl_days(short["refreshToken"])
+    long_days = _refresh_ttl_days(long["refreshToken"])
+
+    assert abs(short_days - settings.REFRESH_TOKEN_TTL_DAYS) < 0.01
+    assert abs(long_days - settings.REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS) < 0.01
+    assert long_days > short_days

@@ -9,12 +9,16 @@ interface AuthState {
   user: User | null;
   mspId: string | null;
   isAuthenticated: boolean;
-  setAuth: (args: {
-    accessToken: string;
-    refreshToken: string;
-    user: User;
-    mspId: string;
-  }) => void;
+  rememberMe: boolean;
+  setAuth: (
+    args: {
+      accessToken: string;
+      refreshToken: string;
+      user: User;
+      mspId: string;
+    },
+    rememberMe?: boolean,
+  ) => void;
   updateAccessToken: (accessToken: string) => void;
   clear: () => void;
 }
@@ -27,8 +31,16 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       mspId: null,
       isAuthenticated: false,
-      setAuth: ({ accessToken, refreshToken, user, mspId }) =>
-        set({ accessToken, refreshToken, user, mspId, isAuthenticated: true }),
+      rememberMe: false,
+      setAuth: ({ accessToken, refreshToken, user, mspId }, rememberMe = false) =>
+        set({
+          accessToken,
+          refreshToken,
+          user,
+          mspId,
+          isAuthenticated: true,
+          rememberMe,
+        }),
       updateAccessToken: (accessToken) => set({ accessToken }),
       clear: () =>
         set({
@@ -37,6 +49,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           mspId: null,
           isAuthenticated: false,
+          rememberMe: false,
         }),
     }),
     {
@@ -45,6 +58,7 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         user: state.user,
         mspId: state.mspId,
+        rememberMe: state.rememberMe,
       }),
       onRehydrateStorage: () => (state) => {
         if (state && state.refreshToken && state.user) {

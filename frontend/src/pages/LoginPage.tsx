@@ -11,6 +11,7 @@ import type { ApiError } from "@/types/api";
 const loginSchema = z.object({
   username: z.string().min(1, "Email is required").email("Enter a valid email"),
   password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean(),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -26,13 +27,13 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { username: "", password: "" },
+    defaultValues: { username: "", password: "", rememberMe: false },
   });
 
   const onSubmit = async (values: LoginForm) => {
     setServerError(null);
     try {
-      await login(values.username, values.password);
+      await login(values.username, values.password, values.rememberMe);
       navigate("/dashboard", { replace: true });
     } catch (err) {
       const axiosError = err as AxiosError<ApiError>;
@@ -91,6 +92,14 @@ export function LoginPage() {
               <p className="mt-1 text-xs text-red">{errors.password.message}</p>
             )}
           </div>
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              {...register("rememberMe")}
+              className="h-3.5 w-3.5 rounded border-border bg-surface2 text-accent focus:ring-accent/60"
+            />
+            <span>Remember me on this device</span>
+          </label>
           {serverError && (
             <div
               role="alert"

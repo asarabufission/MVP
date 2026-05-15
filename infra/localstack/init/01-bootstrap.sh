@@ -4,6 +4,7 @@ set -euo pipefail
 REGION="${AWS_REGION:-us-east-1}"
 BUCKET="msp-guardian-poc"
 DDB_TABLE="msp_guardian_mappings"
+DDB_CONNECTOR_REGISTRY="connector_registry"
 GLUE_DB="msp_guardian_poc"
 LAMBDA_NAME="testDatasourceConnection"
 LAMBDA_SRC="/var/lambdas/test_datasource_connection"
@@ -22,6 +23,14 @@ awslocal dynamodb create-table \
   --table-name "${DDB_TABLE}" \
   --attribute-definitions AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S \
   --key-schema AttributeName=pk,KeyType=HASH AttributeName=sk,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST \
+  --region "${REGION}" || true
+
+echo "[bootstrap] creating DynamoDB table: ${DDB_CONNECTOR_REGISTRY}"
+awslocal dynamodb create-table \
+  --table-name "${DDB_CONNECTOR_REGISTRY}" \
+  --attribute-definitions AttributeName=source_id,AttributeType=S \
+  --key-schema AttributeName=source_id,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
   --region "${REGION}" || true
 

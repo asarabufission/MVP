@@ -111,3 +111,28 @@ export interface IdentifierOverrideBody {
   identifierType: string;
   identifierValue: string;
 }
+
+export interface AssignmentCreateBody {
+  datasourceId: string;
+  identifierType?: string | null;
+  identifierValue?: string | null;
+}
+
+export interface DatasourceListItem {
+  id: string;
+  name: string;
+  vendor: string;
+  category: DatasourceCategory;
+  sourceType: string;
+  scope: string;
+  status: string;
+  lastRunAt: string | null;
+  createdAt: string;
+  clientId: string | null;
+  blueprintId: string | null;
+}
+
+export interface DatasourceListResponse {
+  items: DatasourceListItem[];
+  totalCount: number;
+}

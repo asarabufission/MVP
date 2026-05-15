@@ -54,3 +54,9 @@ class DatasourceDraft(Base, TimestampMixin):
         nullable=False,
         server_default=text("'DRAFT'"),
     )
+    client_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id"),
+        nullable=True,
+    )
+    blueprint_id: Mapped[str | None] = mapped_column(String(80), nullable=True)

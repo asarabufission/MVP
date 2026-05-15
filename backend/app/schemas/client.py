@@ -24,6 +24,12 @@ class IdentifierOverrideRequest(CamelModel):
     identifier_value: str
 
 
+class AssignmentCreateRequest(CamelModel):
+    datasource_id: uuid.UUID
+    identifier_type: str | None = None
+    identifier_value: str | None = None
+
+
 class ClientListItem(CamelModel):
     id: uuid.UUID
     name: str

@@ -46,7 +46,7 @@ app.include_router(dashboard.router, prefix=f"{api_prefix}/dashboard", tags=["da
 app.include_router(clients.router, prefix=f"{api_prefix}/clients", tags=["clients"])
 app.include_router(
     client_assignments.router,
-    prefix=f"{api_prefix}/client-assignments",
+    prefix=f"{api_prefix}/clients",
     tags=["client-assignments"],
 )
 app.include_router(

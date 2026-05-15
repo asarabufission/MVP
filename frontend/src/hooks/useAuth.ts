@@ -8,17 +8,25 @@ export function useAuth() {
   const { accessToken, refreshToken, user, mspId, isAuthenticated, setAuth, clear } =
     useAuthStore();
 
-  async function login(username: string, password: string): Promise<LoginResponse> {
+  async function login(
+    username: string,
+    password: string,
+    rememberMe: boolean = false,
+  ): Promise<LoginResponse> {
     const { data } = await api.post<LoginResponse>("/auth/login", {
       username,
       password,
+      rememberMe,
     });
-    setAuth({
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      user: data.user,
-      mspId: data.mspId,
-    });
+    setAuth(
+      {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        user: data.user,
+        mspId: data.mspId,
+      },
+      rememberMe,
+    );
     return data;
   }
 

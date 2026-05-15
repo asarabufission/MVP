@@ -117,10 +117,6 @@ export default function App() {
               element={<PlaceholderPage title="Add Datasource" />}
             />
             <Route
-              path="/client-source-mapping"
-              element={<PlaceholderPage title="Client Source Mapping" />}
-            />
-            <Route
               path="/reports"
               element={<PlaceholderPage title="Reports" />}
             />

@@ -60,3 +60,9 @@ class Datasource(Base, TimestampMixin):
         ForeignKey("users.id"),
         nullable=True,
     )
+    client_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id"),
+        nullable=True,
+    )
+    blueprint_id: Mapped[str | None] = mapped_column(String(80), nullable=True)

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_TTL_MINUTES: int = 15
     REFRESH_TOKEN_TTL_DAYS: int = 7
+    REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS: int = 30
 
     AWS_REGION: str
     AWS_ENDPOINT_URL: Optional[str] = None
@@ -35,6 +36,7 @@ class Settings(BaseSettings):
     S3_MAPPINGS_PREFIX: str
 
     DYNAMODB_TABLE: str
+    DYNAMODB_CONNECTOR_REGISTRY_TABLE: str = "connector_registry"
     GLUE_DATABASE: str
     SECRETS_PREFIX: str
     LAMBDA_TEST_CONNECTION_NAME: str

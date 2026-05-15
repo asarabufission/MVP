@@ -7,6 +7,7 @@ from app.schemas.common import CamelModel
 class LoginRequest(CamelModel):
     username: str
     password: str
+    remember_me: bool = False
 
 
 class RefreshRequest(CamelModel):

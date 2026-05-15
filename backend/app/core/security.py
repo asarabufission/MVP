@@ -65,14 +65,15 @@ def create_access_token(
 
 
 def create_refresh_token(
-    *, user_id: uuid.UUID, msp_id: uuid.UUID, role: str
+    *, user_id: uuid.UUID, msp_id: uuid.UUID, role: str, ttl_days: int | None = None
 ) -> tuple[str, datetime]:
+    days = ttl_days if ttl_days is not None else settings.REFRESH_TOKEN_TTL_DAYS
     payload, exp = _build_payload(
         user_id=user_id,
         msp_id=msp_id,
         role=role,
         token_type="refresh",
-        expires_delta=timedelta(days=settings.REFRESH_TOKEN_TTL_DAYS),
+        expires_delta=timedelta(days=days),
     )
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return token, exp

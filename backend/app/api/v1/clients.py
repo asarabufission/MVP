@@ -7,19 +7,16 @@ from app.api.deps import get_current_user, get_db
 from app.core.roles import require_role
 from app.models.user import User
 from app.schemas.client import (
-    ClientAssignmentItem,
     ClientCreateRequest,
     ClientDetailResponse,
     ClientListResponse,
     ClientPatchRequest,
-    IdentifierOverrideRequest,
 )
 from app.services.client_service import (
     create_client,
     get_client_detail,
     list_clients,
     patch_client,
-    set_assignment_identifier,
     soft_delete_client,
 )
 
@@ -88,22 +85,3 @@ async def delete_client_endpoint(
     if not deleted:
         raise HTTPException(status_code=404, detail="Client not found")
     return Response(status_code=204)
-
-
-@router.patch(
-    "/{client_id}/assignments/{datasource_id}/identifier",
-    response_model=ClientAssignmentItem,
-)
-async def set_assignment_identifier_endpoint(
-    client_id: uuid.UUID,
-    datasource_id: uuid.UUID,
-    payload: IdentifierOverrideRequest,
-    user: User = Depends(require_role("MSP_ADMIN")),
-    db: AsyncSession = Depends(get_db),
-) -> ClientAssignmentItem:
-    item = await set_assignment_identifier(
-        db, user.msp_id, client_id, datasource_id, payload
-    )
-    if item is None:
-        raise HTTPException(status_code=404, detail="Assignment not found")
-    return item
