@@ -242,6 +242,7 @@ clients
   default_identifier_type VARCHAR(60) NOT NULL
   default_identifier_value VARCHAR(160) NOT NULL
   readiness VARCHAR(20) NOT NULL DEFAULT 'NEEDS_SETUP'
+  s3_base_path VARCHAR(500) NULL                    -- v7.1 gap: slugified S3 prefix set on first draft; never updated on name change
   created_at, updated_at
   UNIQUE(msp_id, name)
 
@@ -250,14 +251,21 @@ datasource_drafts
   msp_id UUID FK, created_by UUID FK -> users.id
   client_id UUID FK -> clients.id NULL              -- v7.1: target client selected in Step 1
   blueprint_id VARCHAR(80) NULL                     -- v7.1: connector_registry source_id
-  name VARCHAR(160) NOT NULL
+  name VARCHAR(160) NOT NULL                        -- vendor name (e.g. "Datto RMM")
+  display_name VARCHAR(200) NULL                    -- v7.1 gap: user-facing label e.g. "DattoRMM/Acme Corp"
   vendor VARCHAR(160) NOT NULL
   category VARCHAR(40) NOT NULL CHECK (category IN ('LICENSING','ENDPOINT','RECONCILIATION'))
   source_type VARCHAR(40) NOT NULL CHECK (source_type IN ('API','FILE_UPLOAD'))
   scope VARCHAR(40) NOT NULL CHECK (scope IN ('MSP_LEVEL','CLIENT_SPECIFIC'))
   secret_arn VARCHAR(400) NULL
-  last_attempt_id UUID NULL
+  last_attempt_id UUID NULL                         -- attemptId from last test-connection call
+  current_step SMALLINT NOT NULL DEFAULT 1
+        CHECK (current_step BETWEEN 1 AND 4)        -- v7.1 gap: resume wizard at correct step
+  schema_hash CHAR(64) NULL                         -- v7.1 gap: SHA-256 from test-connection; Postgres fallback when Redis expires
+  sample_s3_path TEXT NULL                          -- v7.1 gap: S3 key of sample.json written by Lambda
+  draft_payload JSONB NULL                          -- v7.1 gap: spare store for vendor details + selection cache snapshot
   status VARCHAR(40) NOT NULL DEFAULT 'DRAFT'
+        CHECK (status IN ('DRAFT','ACTIVATED','ABANDONED'))  -- v7.1 gap: CHECK was missing
   created_at, updated_at
 
 datasources
@@ -274,7 +282,8 @@ datasources
   status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
         CHECK (status IN ('ACTIVE','ACTIVATING','DRAFT','DEGRADED','DISABLED','INACTIVE'))
   active_mapping_version INT NOT NULL DEFAULT 1
-  secret_arn VARCHAR(400) NOT NULL
+  secret_arn VARCHAR(400) NOT NULL                  -- updated to permanent path after Phase 3 rename
+  schema_hash CHAR(64) NULL                         -- v7.1 gap: activation-time schema hash for drift detection
   glue_table_name VARCHAR(200) NULL
   landing_path VARCHAR(500) NULL
   last_run_at TIMESTAMPTZ NULL
@@ -317,6 +326,7 @@ client_datasource_assignments
 job_runs
   id UUID PK
   msp_id FK, datasource_id FK NULL, client_id FK NULL
+  draft_id UUID FK -> datasource_drafts.id NULL     -- v7.1 gap: set for TEST_CONNECTION jobs (no datasource yet)
   job_type VARCHAR(40) NOT NULL        -- TEST_CONNECTION, ACTIVATION, SCHEDULED, MANUAL, REPORT_GENERATION
   status VARCHAR(20) NOT NULL          -- SUCCESS, FAILED, PARTIAL, RUNNING
   started_at TIMESTAMPTZ NOT NULL
@@ -343,7 +353,13 @@ report_runs
   created_at
 ```
 
-Indexes: `users(email)`, `login_history(user_id, status)`, `datasources(msp_id, status)`, `datasources(client_id)`, `job_runs(msp_id, started_at DESC)`, `client_datasource_assignments(client_id, status)`, `client_datasource_assignments(datasource_id, status)`.
+Indexes: `users(email)`, `login_history(user_id, status)`, `datasources(msp_id, status)`, `datasources(client_id)`, `job_runs(msp_id, started_at DESC)`, `job_runs(draft_id) WHERE draft_id IS NOT NULL`, `client_datasource_assignments(client_id, status)`, `client_datasource_assignments(datasource_id, status)`, `datasource_drafts(msp_id, blueprint_id, status) WHERE status='DRAFT'`.
+
+> **v7.1 schema changes** (connector flow gaps — see migration `V002__connector_flow_gaps.sql`):
+> Added to `clients`: `s3_base_path`.
+> Added to `datasource_drafts`: `display_name`, `current_step`, `schema_hash`, `sample_s3_path`, `draft_payload`; status CHECK constraint added.
+> Added to `datasources`: `schema_hash`.
+> Added to `job_runs`: `draft_id` FK.
 
 ---
 
