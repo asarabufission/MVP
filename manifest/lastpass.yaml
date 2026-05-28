@@ -1,0 +1,196 @@
+schema_version: 1.0
+source_id: lastpass
+display_name: LastPass
+category: Licensing
+scope_default: Client-level
+credential_schema:
+  - key: cid
+    label: Client ID
+    type: text
+    required: true
+  - key: provhash
+    label: Provisioning Hash
+    type: secret
+    required: true
+  - key: apiuser
+    label: API Username
+    type: text
+    required: true
+
+auth:
+  strategy: body_credential
+  on_failure: abort
+  grant_body:
+    cid: "{credentials.cid}"
+    apiuser: "{credentials.apiuser}"
+    provhash: "{credentials.provhash}"
+
+steps:
+  - id: fetch_user_data
+    method: POST
+    url: https://lastpass.com/enterpriseapi.php
+    pagination:
+      type: none
+    grant_body:
+      cid: "{credentials.cid}"
+      provhash: "{credentials.provhash}"
+      apiuser: "{credentials.apiuser}"
+    extract:
+      total: "$.total"
+      count: "$.count"
+      users: "$.Users"
+    response:
+      shape: object_map
+      data_key: Users
+      to_array:
+        key_as: user_id
+    on_failure: abort
+
+schema_fields:
+  - key: user_id
+    label: User ID
+    source: "$.user_id"
+    step: fetch_user_data
+    required: true
+    type: string
+  - key: username
+    label: Username (Email)
+    source: "$.username"
+    step: fetch_user_data
+    required: true
+    type: string
+  - key: fullname
+    label: Full Name
+    source: "$.fullname"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: mp_strength
+    label: Master Password Strength
+    source: "$.mpstrength"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: created
+    label: Account Created
+    source: "$.created"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: last_pw_change
+    label: Last Password Change
+    source: "$.last_pw_change"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: last_login
+    label: Last Login
+    source: "$.last_login"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: never_logged_in
+    label: Never Logged In
+    source: "$.neverloggedin"
+    step: fetch_user_data
+    required: true
+    type: boolean
+  - key: disabled
+    label: Account Disabled
+    source: "$.disabled"
+    step: fetch_user_data
+    required: true
+    type: boolean
+  - key: admin
+    label: Is Admin
+    source: "$.admin"
+    step: fetch_user_data
+    required: false
+    type: boolean
+  - key: total_score
+    label: Security Score
+    source: "$.totalscore"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: multifactor
+    label: MFA Method
+    source: "$.multifactor"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: has_sharing_keys
+    label: Has Sharing Keys
+    source: "$.hasSharingKeys"
+    step: fetch_user_data
+    required: false
+    type: boolean
+  - key: duo_username
+    label: Duo Username
+    source: "$.duousername"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: sites
+    label: Stored Sites
+    source: "$.sites"
+    step: fetch_user_data
+    required: false
+    type: integer
+  - key: notes
+    label: Stored Notes
+    source: "$.notes"
+    step: fetch_user_data
+    required: false
+    type: integer
+  - key: formfills
+    label: Form Fills
+    source: "$.formfills"
+    step: fetch_user_data
+    required: false
+    type: integer
+  - key: applications
+    label: Applications
+    source: "$.applications"
+    step: fetch_user_data
+    required: false
+    type: integer
+  - key: groups
+    label: Groups
+    source: "$.groups"
+    step: fetch_user_data
+    required: false
+    type: array
+  - key: password_reset_required
+    label: Password Reset Required
+    source: "$.password_reset_required"
+    step: fetch_user_data
+    required: false
+    type: boolean
+  - key: attribs_phone
+    label: Phone
+    source: "$.attribs.Phone"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: attribs_department
+    label: Department (Attrib)
+    source: "$.attribs.Department"
+    step: fetch_user_data
+    required: false
+    type: string
+  - key: attribs_secondary_email
+    label: Secondary Email
+    source: "$.attribs.__SecondaryEmail__"
+    step: fetch_user_data
+    required: false
+    type: string
+
+landing:
+  type: s3
+  bucket: "msp-guardian-mvp" #
+  key_pattern: "raw/{source_id}/{client_id}/{run_date}/{step_id}.json" # TBD
+  format: json
+  file_per: step
+  write_mode: overwrite
+  include_run_metadata: true
