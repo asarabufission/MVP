@@ -1,0 +1,83 @@
+schema_version: 1.0
+source_id: datto_rmm_v1
+display_name: Datto RMM
+category: Endpoint
+scope_default: Client-level
+credential_schema:
+  - key: api_url
+    label: API Base URL
+    type: url
+    required: true
+    default: https://zinfandel-api.centrastage.net
+  # - key: grant_type
+  #   label: Grant Type
+  #   type: password
+  #   required: true
+  # default: password
+  - key: api_key
+    label: API Key
+    type: secret
+    required: true
+  - key: api_secret_key
+    label: API Secret Key
+    type: secret
+    required: true
+auth:
+  strategy: oauth2_password_grant
+  token_endpoint: "{credentials.api_url}/auth/oauth/token"
+  client:
+    type: basic
+    username: public-client
+    password: public
+  grant:
+    grant_type: "password"
+    username: "{credentials.api_key}"
+    password: "{credentials.api_secret_key}"
+  extract:
+    access_token: "$.access_token"
+  token_placement:
+    location: header
+    name: Authorization
+    template: "Bearer {access_token}"
+  expiry:
+    source: fixed_seconds
+    seconds: 3600
+    refresh_leeway_seconds: 120
+  on_failure: abort
+
+steps:
+  - id: fetch_devices
+    method: GET
+    url: "{credentials.api_url}/api/v2/account/devices"
+    pagination:
+      type: page
+      page_param: pageNum
+      size_param: max
+      size: 100
+      stop_when: empty_array
+    response:
+      data_key: devices
+    on_failure: abort
+
+schema_fields:
+  - key: hostname
+    label: Hostname
+    source: "$.hostname"
+    step: fetch_devices
+    required: true
+    type: string
+  - key: description
+    label: Description
+    source: "$.description"
+    step: fetch_devices
+    required: false
+    type: string
+
+landing:
+  type: s3
+  bucket: "msp-guardian-mvp"
+  key_pattern: "raw/{source_id}/{client_id}/{run_date}/{step_id}.json"
+  format: json
+  file_per: step
+  write_mode: overwrite
+  include_run_metadata: true

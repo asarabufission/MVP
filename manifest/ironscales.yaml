@@ -1,0 +1,145 @@
+schema_version: 1.0
+source_id: ironscales
+display_name: Ironscales
+category: Licensing
+scope_default: Client-level
+credential_schema:
+  - key: app_api_token
+    label: App API Token
+    type: secret
+    required: true
+  - key: company_id
+    label: Company ID
+    type: text
+    required: true
+  - key: scopes
+    label: Token Scopes
+    type: text
+    required: false
+    default: partner.all
+auth:
+  strategy: jwt_exchange
+  token_endpoint: https://appapi.ironscales.com/appapi/get-token/
+  grant_body:
+    key: "{credentials.app_api_token}"
+    scopes:
+      - "{credentials.scopes|partner.all}"
+  extract:
+    access_token: "$.jwt"
+  token_placement:
+    location: header
+    name: Authorization
+    template: "Bearer {access_token}"
+  expiry:
+    source: never
+  on_failure: abort
+
+steps:
+  - id: fetch_mailboxes
+    method: GET
+    url: https://appapi.ironscales.com/appapi/mailboxes/{credentials.company_id}/list/
+    pagination:
+      type: page
+      page_param: page
+      size_param: size
+      size: 100
+      stop_when: empty_array
+    response:
+      data_key: mailboxes
+    on_failure: abort
+
+schema_fields:
+  - key: mailbox_id
+    label: Mailbox ID
+    source: "$.id"
+    step: fetch_mailboxes
+    required: true
+    type: integer
+  - key: email
+    label: Email Address
+    source: "$.email"
+    step: fetch_mailboxes
+    required: true
+    type: string
+  - key: first_name
+    label: First Name
+    source: "$.firstName"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: last_name
+    label: Last Name
+    source: "$.lastName"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: title
+    label: Title
+    source: "$.title"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: department
+    label: Department
+    source: "$.department"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: phone_number
+    label: Phone Number
+    source: "$.phoneNumber"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: tags
+    label: Tags
+    source: "$.tags"
+    step: fetch_mailboxes
+    required: false
+    type: array
+  - key: language
+    label: Language
+    source: "$.language"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: enabled
+    label: Mailbox Enabled
+    source: "$.enabled"
+    step: fetch_mailboxes
+    required: true
+    type: boolean
+  - key: protected
+    label: Protected
+    source: "$.protected"
+    step: fetch_mailboxes
+    required: true
+    type: boolean
+  - key: unprotected_reason
+    label: Unprotected Reason
+    source: "$.unprotectedReason"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: risk_level
+    label: Risk Level
+    source: "$.riskLevel"
+    step: fetch_mailboxes
+    required: false
+    type: string
+  - key: awareness_level
+    label: Awareness Level
+    source: "$.awarenessLevel"
+    step: fetch_mailboxes
+    required: false
+    type: string
+
+landing:
+  type: s3
+  bucket: "msp-guardian-mvp"
+  key_pattern: "raw/{source_id}/{client_id}/{run_date}/{step_id}.json"
+  format: json
+  file_per: step
+  write_mode: overwrite
+  include_run_metadata: true
+
