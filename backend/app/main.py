@@ -7,6 +7,7 @@ from app.api.v1 import (
     auth,
     client_assignments,
     clients,
+    connectors,
     dashboard,
     datasource_drafts,
     datasources,
@@ -49,6 +50,7 @@ app.include_router(
     prefix=f"{api_prefix}/clients",
     tags=["client-assignments"],
 )
+app.include_router(connectors.router, prefix=f"{api_prefix}/connectors", tags=["connectors"])
 app.include_router(
     datasource_drafts.router,
     prefix=f"{api_prefix}/datasource-drafts",

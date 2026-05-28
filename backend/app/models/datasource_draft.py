@@ -1,7 +1,8 @@
 import uuid
+from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import CheckConstraint, ForeignKey, SmallInteger, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -60,3 +61,12 @@ class DatasourceDraft(Base, TimestampMixin):
         nullable=True,
     )
     blueprint_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    current_step: Mapped[int] = mapped_column(
+        SmallInteger,
+        nullable=False,
+        server_default=text("1"),
+    )
+    schema_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sample_s3_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

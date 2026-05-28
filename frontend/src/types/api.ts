@@ -136,3 +136,15 @@ export interface DatasourceListResponse {
   items: DatasourceListItem[];
   totalCount: number;
 }
+
+export interface JobRunListItem {
+  id: string;
+  status: string;
+  datasourceName: string | null;
+  clientName: string | null;
+  jobType: string;
+  startedAt: string;
+  endedAt: string | null;
+  records: number | null;
+  errorMessage: string | null;
+}

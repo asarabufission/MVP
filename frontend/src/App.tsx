@@ -16,6 +16,7 @@ import { queryClient } from "@/lib/queryClient";
 import { ClientDetailPage } from "@/pages/ClientDetailPage";
 import { ClientsPage } from "@/pages/ClientsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { JobRunsPage } from "@/pages/JobRunsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -124,10 +125,7 @@ export default function App() {
               path="/reports/history"
               element={<PlaceholderPage title="Reports History" />}
             />
-            <Route
-              path="/job-runs"
-              element={<PlaceholderPage title="Job Runs" />}
-            />
+            <Route path="/job-runs" element={<JobRunsPage />} />
             <Route
               path="/settings"
               element={<PlaceholderPage title="Settings" />}

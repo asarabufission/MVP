@@ -31,6 +31,11 @@ class JobRun(Base, CreatedAtMixin):
         ForeignKey("clients.id"),
         nullable=True,
     )
+    draft_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("datasource_drafts.id"),
+        nullable=True,
+    )
     job_type: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

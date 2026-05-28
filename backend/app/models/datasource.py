@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -66,3 +67,5 @@ class Datasource(Base, TimestampMixin):
         nullable=True,
     )
     blueprint_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    schema_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

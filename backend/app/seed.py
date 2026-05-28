@@ -17,6 +17,7 @@ from app.models.job_run import JobRun
 from app.models.msp import Msp
 from app.models.user import User
 from app.services.aws_clients import localstack_client
+# from app.services.connector_service import seed_connector_registry
 
 
 def _hash_password(password: str) -> str:
@@ -378,6 +379,7 @@ async def main() -> None:
 
         seed_landing_files(msp.id, datasources)
 
+    # seed_connector_registry()
     print("Database seeded successfully")
 
 
