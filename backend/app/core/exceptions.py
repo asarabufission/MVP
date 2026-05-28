@@ -79,6 +79,24 @@ class InvalidIdentifierError(AppError):
     default_detail = "Identifier type or value is invalid"
 
 
+class ConnectorNotFoundError(AppError):
+    status_code = 404
+    code = "CONNECTOR_NOT_FOUND"
+    default_detail = "Connector blueprint not found"
+
+
+class DraftNotFoundError(AppError):
+    status_code = 404
+    code = "DRAFT_NOT_FOUND"
+    default_detail = "Datasource draft not found"
+
+
+class DatasourceNotFoundError(AppError):
+    status_code = 404
+    code = "DATASOURCE_NOT_FOUND"
+    default_detail = "Datasource not found"
+
+
 class InvalidDatasourceSelectionError(AppError):
     status_code = 400
     code = "INVALID_DATASOURCE_SELECTION"

@@ -9,9 +9,9 @@ export function AppShell() {
   useIdleTimer({ onTimeout: () => setIdleOpen(true) });
 
   return (
-    <div className="flex min-h-screen bg-bg font-sans text-text">
+    <div className="flex h-screen min-h-screen bg-bg font-sans text-text">
       <Sidebar />
-      <main className="flex-1 overflow-x-hidden">
+      <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden">
         <div className="p-8">
           <Outlet />
         </div>

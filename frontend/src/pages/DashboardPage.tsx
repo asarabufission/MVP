@@ -20,6 +20,7 @@ import { Table, type Column } from "@/components/ui/Table";
 import { useDashboardSummary } from "@/hooks/useDashboard";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
+import { DASHBOARD_ACTIVITY_TABLE_SCROLL_MAX } from "@/lib/layout";
 import { useAuthStore } from "@/stores/auth-store";
 import type { RecentActivityItem } from "@/types/api";
 
@@ -219,6 +220,8 @@ export function DashboardPage() {
               columns={ACTIVITY_COLUMNS}
               rows={data.recentActivity}
               keyFn={(r) => r.id}
+              scrollable
+              scrollMaxHeight={DASHBOARD_ACTIVITY_TABLE_SCROLL_MAX}
               emptyState={
                 <EmptyState
                   icon={Inbox}

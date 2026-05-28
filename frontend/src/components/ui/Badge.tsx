@@ -48,6 +48,7 @@ export function statusToTone(status: string): BadgeTone {
     case "PENDING":
       return "amber";
     case "ACTIVATING":
+    case "QUEUED":
       return "blue";
     case "DRAFT":
     case "INACTIVE":
