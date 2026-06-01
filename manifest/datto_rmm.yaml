@@ -2,7 +2,7 @@ schema_version: 1.0
 source_id: datto_rmm_v1
 display_name: Datto RMM
 category: Endpoint
-scope_default: Client-level
+scope_default: MSP-level
 credential_schema:
   - key: API_URL
     label: API Base URL
