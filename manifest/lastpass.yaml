@@ -1,18 +1,18 @@
 schema_version: 1.0
-source_id: lastpass
+source_id: lastpass_v1
 display_name: LastPass
 category: Licensing
 scope_default: Client-level
 credential_schema:
-  - key: cid
+  - key: LASTPASS_CID
     label: Client ID
     type: text
     required: true
-  - key: provhash
+  - key: LASTPASS_PROVHASH
     label: Provisioning Hash
     type: secret
     required: true
-  - key: apiuser
+  - key: LASTPASS_APIUSER
     label: API Username
     type: text
     required: true
@@ -21,9 +21,9 @@ auth:
   strategy: body_credential
   on_failure: abort
   grant_body:
-    cid: "{credentials.cid}"
-    apiuser: "{credentials.apiuser}"
-    provhash: "{credentials.provhash}"
+    cid: "{credentials.LASTPASS_CID}"
+    apiuser: "{credentials.LASTPASS_APIUSER}"
+    provhash: "{credentials.LASTPASS_PROVHASH}"
 
 steps:
   - id: fetch_user_data
@@ -32,9 +32,9 @@ steps:
     pagination:
       type: none
     grant_body:
-      cid: "{credentials.cid}"
-      provhash: "{credentials.provhash}"
-      apiuser: "{credentials.apiuser}"
+      cid: "{credentials.LASTPASS_CID}"
+      apiuser: "{credentials.LASTPASS_APIUSER}"
+      provhash: "{credentials.LASTPASS_PROVHASH}"
     extract:
       total: "$.total"
       count: "$.count"

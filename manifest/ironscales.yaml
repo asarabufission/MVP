@@ -1,29 +1,29 @@
 schema_version: 1.0
-source_id: ironscales
+source_id: ironscales_v1
 display_name: Ironscales
 category: Licensing
 scope_default: Client-level
 credential_schema:
-  - key: app_api_token
+  - key: IRONSCALES_KEY
     label: App API Token
     type: secret
     required: true
-  - key: company_id
+  - key: IRONSCALES_COMPANY_ID
     label: Company ID
     type: text
     required: true
   - key: scopes
     label: Token Scopes
     type: text
-    required: false
+    required: true
     default: partner.all
 auth:
   strategy: jwt_exchange
   token_endpoint: https://appapi.ironscales.com/appapi/get-token/
   grant_body:
-    key: "{credentials.app_api_token}"
+    key: "{credentials.IRONSCALES_KEY}"
     scopes:
-      - "{credentials.scopes|partner.all}"
+      - "partner.all"
   extract:
     access_token: "$.jwt"
   token_placement:
@@ -37,7 +37,7 @@ auth:
 steps:
   - id: fetch_mailboxes
     method: GET
-    url: https://appapi.ironscales.com/appapi/mailboxes/{credentials.company_id}/list/
+    url: https://appapi.ironscales.com/appapi/mailboxes/{credentials.IRONSCALES_COMPANY_ID}/list/
     pagination:
       type: page
       page_param: page
