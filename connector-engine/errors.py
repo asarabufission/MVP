@@ -15,3 +15,11 @@ class AuthError(ConnectorEngineError):
 
 class StrategyNotImplementedError(ConnectorEngineError):
     """Manifest references an auth strategy that is not implemented yet."""
+
+
+class StepError(ConnectorEngineError):
+    """A data step failed (request, pagination, foreach, or transform)."""
+
+
+class LandingError(ConnectorEngineError):
+    """Writing raw step output to the landing target (S3) failed."""

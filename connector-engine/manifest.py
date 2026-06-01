@@ -14,6 +14,14 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST_DIR = _REPO_ROOT / "manifest"
 
 
+def _iter_manifest_files(directory: Path) -> list[Path]:
+    """All manifest files in a directory (.yaml and .yml), sorted by name."""
+    return sorted(
+        [*directory.glob("*.yaml"), *directory.glob("*.yml")],
+        key=lambda p: p.name,
+    )
+
+
 class CredentialField(BaseModel):
     key: str
     label: str
@@ -78,7 +86,7 @@ def load_manifest(
     if not directory.is_dir():
         raise ManifestError(f"Manifest directory not found: {directory}")
 
-    for path in sorted(directory.glob("*.yaml")):
+    for path in _iter_manifest_files(directory):
         with path.open(encoding="utf-8") as handle:
             raw = yaml.safe_load(handle)
         if isinstance(raw, dict) and raw.get("source_id") == source_id:
@@ -100,7 +108,7 @@ def manifest_path_for_source(
     """Return filesystem path for a source_id (for Slice 0 smoke tests)."""
     directory = manifest_dir or DEFAULT_MANIFEST_DIR
     manifest = load_manifest(source_id, manifest_dir=directory)
-    for path in sorted(directory.glob("*.yaml")):
+    for path in _iter_manifest_files(directory):
         with path.open(encoding="utf-8") as handle:
             raw = yaml.safe_load(handle)
         if isinstance(raw, dict) and raw.get("source_id") == manifest.source_id:

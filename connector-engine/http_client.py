@@ -25,8 +25,8 @@ class HttpClient:
         json_body: dict[str, Any] | None = None,
         form_body: dict[str, str] | None = None,
         basic_auth: tuple[str, str] | None = None,
-    ) -> dict[str, Any]:
-        """One HTTP call; returns parsed JSON dict."""
+    ) -> dict[str, Any] | list[Any]:
+        """One HTTP call; returns parsed JSON (object or array)."""
         req_headers = dict(headers or {})
         if json_body is not None and "Content-Type" not in req_headers:
             req_headers.setdefault("Content-Type", "application/json")
@@ -60,8 +60,8 @@ class HttpClient:
         except ValueError as exc:
             raise AuthError("Vendor returned non-JSON response") from exc
 
-        if not isinstance(payload, dict):
-            raise AuthError("Vendor response must be a JSON object")
+        if not isinstance(payload, (dict, list)):
+            raise AuthError("Vendor response must be a JSON object or array")
         return payload
 
     def close(self) -> None:

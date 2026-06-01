@@ -2,7 +2,8 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
-BUCKET="msp-guardian-poc"
+# Must match S3_BUCKET in .env.local / .env.ec2 (app writes/reads this bucket).
+BUCKET="${S3_BUCKET:-msp-guardian-mvp}"
 DDB_TABLE="msp_guardian_mappings"
 DDB_CONNECTOR_REGISTRY="connector_registry"
 GLUE_DB="msp_guardian_poc"

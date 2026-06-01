@@ -13,6 +13,8 @@ from manifest import Manifest
 
 from .registry import AuthResult, get_auth_strategy, register
 from . import body_credential as _body_credential  # noqa: F401 — registers
+from . import certificate_msal as _certificate_msal  # noqa: F401
+from . import header_key as _header_key  # noqa: F401
 from . import jwt_exchange as _jwt_exchange  # noqa: F401
 from . import oauth2_password as _oauth2_password  # noqa: F401
 

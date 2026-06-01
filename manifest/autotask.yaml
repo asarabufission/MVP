@@ -1,0 +1,310 @@
+schema_version: 1.0
+source_id: autotask_v1
+display_name: Autotask
+category: Licensing
+scope_default: Client-level
+
+# ── Credential Schema ────────────────────────────────────────────────────────
+# Fields shown to the MSP user in the connector setup UI.
+# Credentials are persisted exclusively in AWS Secrets Manager —
+# never in the database, logs, or frontend state.
+credential_schema:
+  - key: AUTOTASK_API_URL
+    label: API Base URL (Zone)
+    type: url
+    required: true
+    default: https://webservices15.autotask.net
+    hint: "Your Autotask zone host, e.g. https://webservices15.autotask.net"
+  - key: AUTOTASK_USERNAME
+    label: API User Name
+    type: text
+    required: true
+  - key: AUTOTASK_API_SECRET
+    label: API Secret
+    type: secret
+    required: true
+  - key: AUTOTASK_INTEGRATION_CODE
+    label: API Integration Code
+    type: secret
+    required: true
+  - key: AUTOTASK_COMPANY_ID
+    label: Company ID
+    type: text
+    required: true
+    hint: "Autotask Company (Account) ID to pull recurring contracts for."
+
+# ── Auth Strategy ────────────────────────────────────────────────────────────
+# strategy: header_key
+#   No token exchange. Autotask authenticates every request with three static
+#   headers built from the stored credentials. The engine resolves these once
+#   and injects them on every data step automatically.
+auth:
+  strategy: header_key
+  headers:
+    ApiIntegrationCode: "{credentials.AUTOTASK_INTEGRATION_CODE}"
+    UserName: "{credentials.AUTOTASK_USERNAME}"
+    Secret: "{credentials.AUTOTASK_API_SECRET}"
+    Content-Type: "application/json"
+  on_failure: abort
+
+# ── Steps ────────────────────────────────────────────────────────────────────
+# Execution order is top-to-bottom. Each step's results are stored under
+# context["steps"][step_id] and are accessible to later steps as
+# {steps.<id>.<field>} or, inside a foreach, as {item.<field>}.
+#
+# Transport: POST to the entity /query endpoint with a STRUCTURED body. The
+# filter is a YAML list of {field, op, value} maps (not an inline JSON string),
+# so the {placeholder} resolver never collides with literal JSON braces.
+# Pagination: Autotask returns pageDetails.nextPageUrl; the engine follows it
+# until absent (cursor_url paginator).
+steps:
+
+  # ── Step 1: fetch_contracts ──────────────────────────────────────────────
+  # Recurring contracts (Microsoft Licences) for the configured company.
+  # Each returned record's `id` is the contractID consumed by step 2.
+  - id: fetch_contracts
+    description: >
+      Query Autotask Contracts for the configured company where the contract
+      name contains "Recurring". Returns the recurring (Microsoft Licences)
+      contracts whose IDs drive the ContractServices lookup in step 2.
+    method: POST
+    url: "{credentials.AUTOTASK_API_URL}/ATServicesRest/V1.0/Contracts/query"
+    body:
+      MaxRecords: 500
+      filter:
+        - field: companyID
+          op: eq
+          value: "{credentials.AUTOTASK_COMPANY_ID}"
+        - field: contractName
+          op: like
+          value: "%Recurring%"
+    pagination:
+      type: cursor_url
+      next_key: "pageDetails.nextPageUrl"
+      stop_when: no_next_link
+    response:
+      data_key: items
+    on_failure: abort
+
+  # ── Step 2: fetch_contract_services ──────────────────────────────────────
+  # foreach over the contracts from step 1: one query per contractID.
+  # Each returned record carries contractID + its own `id` (contractServiceID),
+  # the unique pair consumed by step 3.
+  - id: fetch_contract_services
+    description: >
+      For each contract from fetch_contracts, query ContractServices filtered by
+      contractID. Yields the services attached to each recurring contract.
+    type: foreach
+    depends_on: fetch_contracts
+    foreach_source: "steps.fetch_contracts"
+    foreach_item_key: id
+    method: POST
+    url: "{credentials.AUTOTASK_API_URL}/ATServicesRest/V1.0/ContractServices/query"
+    body:
+      MaxRecords: 500
+      filter:
+        - field: contractID
+          op: eq
+          value: "{item.id}"
+    pagination:
+      type: cursor_url
+      next_key: "pageDetails.nextPageUrl"
+      stop_when: no_next_link
+    response:
+      data_key: items
+    output_as: contract_services
+    on_failure: abort
+
+  # ── Step 3: fetch_contract_service_units ─────────────────────────────────
+  # foreach over the contract services from step 2, deduplicated to unique
+  # (contractID, contractServiceID) pairs. One query per pair.
+  # ContractServiceUnits records already include contractID & contractServiceID,
+  # so no parent-field join is required.
+  - id: fetch_contract_service_units
+    description: >
+      For each unique (contractID, contractServiceID) pair from
+      fetch_contract_services, query ContractServiceUnits. Yields the per-unit
+      pricing/quantity rows that quantify each recurring service.
+    type: foreach
+    depends_on: fetch_contract_services
+    foreach_source: "steps.fetch_contract_services"
+    foreach_dedup_on:
+      - contractID
+      - id
+    method: POST
+    url: "{credentials.AUTOTASK_API_URL}/ATServicesRest/V1.0/ContractServiceUnits/query"
+    body:
+      MaxRecords: 500
+      filter:
+        - field: contractID
+          op: eq
+          value: "{item.contractID}"
+        - field: contractServiceID
+          op: eq
+          value: "{item.id}"
+    pagination:
+      type: cursor_url
+      next_key: "pageDetails.nextPageUrl"
+      stop_when: no_next_link
+    response:
+      data_key: items
+    output_as: contract_service_units
+    skip_if_response_empty: true
+    on_failure: continue
+
+# ── Schema Fields ─────────────────────────────────────────────────────────────
+# Canonical field definitions for downstream Silver normalisation.
+# source: JSONPath evaluated against each raw record produced by `step`.
+schema_fields:
+
+  # — CONTRACT FIELDS (fetch_contracts) ──────────────────────────────────────
+  - key: contract_id
+    label: Contract ID
+    source: "$.id"
+    step: fetch_contracts
+    required: true
+    type: integer
+  - key: contract_company_id
+    label: Company ID
+    source: "$.companyID"
+    step: fetch_contracts
+    required: true
+    type: integer
+  - key: contract_name
+    label: Contract Name
+    source: "$.contractName"
+    step: fetch_contracts
+    required: true
+    type: string
+  - key: contract_type
+    label: Contract Type
+    source: "$.contractType"
+    step: fetch_contracts
+    required: false
+    type: integer
+  - key: contract_status
+    label: Status
+    source: "$.status"
+    step: fetch_contracts
+    required: false
+    type: integer
+  - key: contract_start_date
+    label: Start Date
+    source: "$.startDate"
+    step: fetch_contracts
+    required: false
+    type: string
+  - key: contract_end_date
+    label: End Date
+    source: "$.endDate"
+    step: fetch_contracts
+    required: false
+    type: string
+
+  # — CONTRACT SERVICE FIELDS (fetch_contract_services) ───────────────────────
+  - key: contract_service_id
+    label: Contract Service ID
+    source: "$.id"
+    step: fetch_contract_services
+    required: true
+    type: integer
+  - key: cs_contract_id
+    label: Contract ID
+    source: "$.contractID"
+    step: fetch_contract_services
+    required: true
+    type: integer
+  - key: cs_service_id
+    label: Service ID
+    source: "$.serviceID"
+    step: fetch_contract_services
+    required: false
+    type: integer
+  - key: cs_unit_price
+    label: Unit Price
+    source: "$.unitPrice"
+    step: fetch_contract_services
+    required: false
+    type: number
+  - key: cs_unit_cost
+    label: Unit Cost
+    source: "$.unitCost"
+    step: fetch_contract_services
+    required: false
+    type: number
+  - key: cs_internal_description
+    label: Internal Description
+    source: "$.internalDescription"
+    step: fetch_contract_services
+    required: false
+    type: string
+
+  # — CONTRACT SERVICE UNIT FIELDS (fetch_contract_service_units) ─────────────
+  - key: contract_service_unit_id
+    label: Contract Service Unit ID
+    source: "$.id"
+    step: fetch_contract_service_units
+    required: true
+    type: integer
+  - key: csu_contract_id
+    label: Contract ID
+    source: "$.contractID"
+    step: fetch_contract_service_units
+    required: true
+    type: integer
+  - key: csu_contract_service_id
+    label: Contract Service ID
+    source: "$.contractServiceID"
+    step: fetch_contract_service_units
+    required: true
+    type: integer
+  - key: csu_service_id
+    label: Service ID
+    source: "$.serviceID"
+    step: fetch_contract_service_units
+    required: false
+    type: integer
+  - key: csu_units
+    label: Units
+    source: "$.units"
+    step: fetch_contract_service_units
+    required: false
+    type: number
+  - key: csu_price
+    label: Price
+    source: "$.price"
+    step: fetch_contract_service_units
+    required: false
+    type: number
+  - key: csu_cost
+    label: Cost
+    source: "$.cost"
+    step: fetch_contract_service_units
+    required: false
+    type: number
+  - key: csu_start_date
+    label: Start Date
+    source: "$.startDate"
+    step: fetch_contract_service_units
+    required: false
+    type: string
+  - key: csu_end_date
+    label: End Date
+    source: "$.endDate"
+    step: fetch_contract_service_units
+    required: false
+    type: string
+
+# ── Landing ───────────────────────────────────────────────────────────────────
+# One raw JSON file per data-producing step (file_per: step → 3 files):
+#   raw/autotask_v1/<client_id>/<run_date>/fetch_contracts.json
+#   raw/autotask_v1/<client_id>/<run_date>/fetch_contract_services.json
+#   raw/autotask_v1/<client_id>/<run_date>/fetch_contract_service_units.json
+landing:
+  type: s3
+  bucket: "msp-guardian-mvp"
+  key_pattern: "raw/{source_id}/{client_id}/{run_date}/{step_id}.json"
+  format: json
+  file_per: step
+  write_mode: overwrite
+  include_run_metadata: true

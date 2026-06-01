@@ -1,0 +1,384 @@
+schema_version: "1.0"
+source_id: microsoft_365
+display_name: "Microsoft 365 (Graph)"
+category: Licensing
+scope_default: Client-level
+ 
+# ── Credential Schema ────────────────────────────────────────────────────────
+# Fields shown to the MSP user in the connector setup UI.
+# Credentials are persisted exclusively in AWS Secrets Manager —
+# never in the database, logs, or frontend state.
+credential_schema:
+  - key: domain
+    label: Primary Domain
+    type: text
+    required: true
+    placeholder: "contoso.com"
+    
+  - key: api_url
+    label: API URL
+    type: url
+    required: true  
+ 
+  - key: tenant_id
+    label: Tenant ID
+    type: text
+    required: false
+    placeholder: "efaaa969-ff30-4b44-8608-a3fbcd8fb752"
+    
+ 
+  - key: client_id
+    label: Application (Client) ID
+    type: text
+    required: true
+    placeholder: "bccdd1f9-4597-47b0-97e9-e6f831107f36"
+    
+ 
+  - key: certificate_pem
+    label: PEM Certificate
+    type: file
+    accept: .pem
+    required: true
+    
+ 
+# ── Auth Strategy ────────────────────────────────────────────────────────────
+# strategy: certificate_msal
+#   MSAL CertificateCredential flow — acquires a Bearer token scoped to
+#   Microsoft Graph using the uploaded PEM certificate. No client secret.
+#
+# token_placement: the engine injects the Authorization header automatically
+#   on every data step — steps do NOT need to declare it explicitly.
+#
+# expiry: token is valid for 3600 s; engine refreshes 120 s before expiry.
+#
+# cache_key_extra: tokens are cached per tenant so multi-tenant runs do not
+#   share a token across different Azure AD directories.
+auth:
+  strategy: certificate_msal
+  tenant_id: "{credentials.tenant_id|steps.discover_tenant.tenant_id}"
+  client_id: "{credentials.client_id}"
+  certificate:
+    from: credentials.certificate_pem
+  scopes:
+    - "https://graph.microsoft.com/.default"
+  token_placement:
+    location: header
+    name: Authorization
+    template: "Bearer {access_token}"
+  expiry:
+    source: fixed_seconds
+    seconds: 3600
+    refresh_leeway_seconds: 120
+  cache_key_extra:
+    - tenant_id
+  on_failure: abort
+ 
+# ── Steps ────────────────────────────────────────────────────────────────────
+# Execution order is top-to-bottom.
+# Steps marked pre_auth: true run before the auth strategy acquires its token.
+# Each step's results are stored under context["steps"][step_id] and are
+# accessible in later steps via {steps.<id>.<field>} template syntax.
+steps:
+ 
+  # ── Step 0: discover_tenant ─────────────────────────────────────────────
+  # PRE-AUTH — must run before the certificate_msal strategy so the tenant_id
+  # is available in context when auth.prepare() resolves
+  # "{credentials.tenant_id|steps.discover_tenant.tenant_id}".
+  #
+  # Skipped entirely when the user has already supplied credentials.tenant_id.
+  # The transform op "extract_guid_from_url" strips the GUID from the issuer
+  # URL (e.g. https://sts.windows.net/{guid}/v2.0 → {guid}).
+  - id: discover_tenant
+    pre_auth: true
+    condition: "!credentials.tenant_id"
+    description: >
+      Auto-discover Tenant ID from the tenant domain via the Microsoft OpenID
+      Connect well-known endpoint. Skipped when tenant_id is provided directly.
+    method: GET
+    url: "https://login.microsoftonline.com/{credentials.domain}/.well-known/openid-configuration"
+    extract:
+      tenant_id_raw: "$.issuer"
+    transform:
+      tenant_id:
+        op: extract_guid_from_url
+        source: "steps.discover_tenant.tenant_id_raw"
+    on_failure: abort
+ 
+  # ── Step 1: fetch_subscribed_skus ────────────────────────────────────────
+  # Single call, no pagination.
+  # Returns the tenant-level license inventory: every SKU the tenant has
+  # purchased, with purchased vs consumed unit counts.
+  # Used as the lookup table when reconciling per-user license assignments.
+  - id: fetch_subscribed_skus
+    description: >
+      Retrieve all license SKUs subscribed by the tenant. Gives total purchased
+      vs consumed counts at the tenant level. No pagination — Graph returns
+      all SKUs in one response.
+    method: GET
+    url: "https://graph.microsoft.com/v1.0/subscribedSkus"
+    response:
+      data_key: value
+    on_failure: continue   # non-fatal: pipeline continues without SKU context
+ 
+  # ── Step 2: fetch_users ──────────────────────────────────────────────────
+  # OData next_link pagination — follows @odata.nextLink until absent.
+  # Fetches only the fields needed for the foreach in step 3 plus display.
+  # $top=999 is the Graph maximum per page.
+  - id: fetch_users
+    description: >
+      Retrieve all users with top-level license assignment summary (skuId list
+      only). Full service plan detail is fetched per-user in step 3.
+      Paginated via OData nextLink.
+    method: GET
+    url: "https://graph.microsoft.com/v1.0/users"
+    params:
+      $select: "id,displayName,userPrincipalName,assignedLicenses,department,jobTitle"
+      $top: 999
+    pagination:
+      type: next_link
+      next_key: "@odata.nextLink"
+      stop_when: no_next_link
+    response:
+      data_key: value
+    on_failure: abort       # cannot run step 3 without the user list
+ 
+  # ── Step 3: fetch_user_license_details ───────────────────────────────────
+  # foreach — one GET per user from step 2.
+  # This is the richest license data Graph exposes: every service plan
+  # (Teams, Exchange, SharePoint, etc.) with its provisioning status.
+  #
+  # output_shape: flat_join → for each user-license pair, one output row
+  #   containing the license fields merged with the 5 parent user fields.
+  #   If a user has 3 licenses, 3 rows are produced.
+  #
+  # skip_if_response_empty: users with no assigned licenses return an empty
+  #   value array — no row is emitted (avoids null-license records).
+  #
+  # rate_limit: Graph throttles at ~10 k requests / 10 min per app. For large
+  #   tenants this foreach generates N calls (one per user). Pacing is mandatory.
+  #   On HTTP 429, sleep the Retry-After header value then retry.
+  #
+  # dry_run behaviour: on dry_run=true, run foreach for the first 3 users only.
+  - id: fetch_user_license_details
+    description: >
+      For each user from fetch_users, call /licenseDetails to get the full
+      service plan breakdown per assigned license. Output: one flat row per
+      user-license pair with parent user identity fields merged in.
+    type: foreach
+    depends_on: fetch_users
+    foreach_source: "steps.fetch_users"
+    foreach_item_key: id                 # stable object GUID; survives UPN renames
+    method: GET
+    url: "https://graph.microsoft.com/v1.0/users/{item.id}/licenseDetails"
+    response:
+      data_key: value
+    join_fields_from_parent:
+      - userPrincipalName    # primary lookup key across steps
+      - displayName
+      - department
+      - jobTitle
+      - id                   # Azure AD user object GUID
+    output_shape: flat_join
+    output_as: user_license_details
+    skip_if_response_empty: true
+    rate_limit:
+      requests_per_second: 3
+      retry_on_429: true
+      retry_after_header: Retry-After
+      max_retries: 5
+      backoff_strategy: header_guided
+    on_failure: continue
+ 
+# ── Schema Fields ─────────────────────────────────────────────────────────────
+# Canonical field definitions for downstream Silver normalisation.
+# source: JSONPath expression evaluated against each raw record from `step`.
+schema_fields:
+ 
+  # — TENANT SKU FIELDS (fetch_subscribed_skus) ————————————————————————————
+  - key: sku_id
+    label: SKU ID
+    source: "$.skuId"
+    step: fetch_subscribed_skus
+    required: true
+    type: string
+    note: "Primary join key — links to assigned_sku_id in user_license_details."
+ 
+  - key: sku_part_number
+    label: SKU Part Number
+    source: "$.skuPartNumber"
+    step: fetch_subscribed_skus
+    required: true
+    type: string
+    note: "Human-readable license name, e.g. ENTERPRISEPACK = Office 365 E3, SPB = Microsoft 365 Business Premium."
+ 
+  - key: consumed_units
+    label: Consumed Units
+    source: "$.consumedUnits"
+    step: fetch_subscribed_skus
+    required: true
+    type: integer
+    note: "Licenses currently assigned to users. Compare to enabled_units to detect over/under-provisioning."
+ 
+  - key: enabled_units
+    label: Purchased (Enabled) Units
+    source: "$.prepaidUnits.enabled"
+    step: fetch_subscribed_skus
+    required: false
+    type: integer
+ 
+  - key: suspended_units
+    label: Suspended Units
+    source: "$.prepaidUnits.suspended"
+    step: fetch_subscribed_skus
+    required: false
+    type: integer
+ 
+  - key: warning_units
+    label: Warning Units
+    source: "$.prepaidUnits.warning"
+    step: fetch_subscribed_skus
+    required: false
+    type: integer
+    note: "Licenses nearing expiry. Non-zero value requires attention."
+ 
+  # — USER FIELDS (fetch_users) ─────────────────────────────────────────────
+  - key: user_id
+    label: User Object ID
+    source: "$.id"
+    step: fetch_users
+    required: true
+    type: string
+    note: "Azure AD user GUID. Stable across display name and UPN changes."
+ 
+  - key: user_principal_name
+    label: User Principal Name (UPN)
+    source: "$.userPrincipalName"
+    step: fetch_users
+    required: true
+    type: string
+    note: "Primary user identifier in Graph API calls. Used as foreach_item_key in step 3."
+ 
+  - key: user_display_name
+    label: Display Name
+    source: "$.displayName"
+    step: fetch_users
+    required: false
+    type: string
+ 
+  - key: department
+    label: Department
+    source: "$.department"
+    step: fetch_users
+    required: false
+    type: string
+ 
+  - key: job_title
+    label: Job Title
+    source: "$.jobTitle"
+    step: fetch_users
+    required: false
+    type: string
+ 
+  # — USER LICENSE DETAIL FIELDS (fetch_user_license_details) ─────────────
+  # One output row per user-license pair (flat_join with parent user fields).
+  - key: license_detail_id
+    label: License Detail ID
+    source: "$.id"
+    step: fetch_user_license_details
+    required: true
+    type: string
+    note: "Unique ID for this user-license assignment. Use as deduplication key in Silver."
+ 
+  - key: assigned_sku_id
+    label: Assigned SKU ID
+    source: "$.skuId"
+    step: fetch_user_license_details
+    required: true
+    type: string
+    note: "Foreign key → sku_id in fetch_subscribed_skus. Join here to get SKU name and unit counts."
+ 
+  - key: assigned_sku_part_number
+    label: Assigned SKU Part Number
+    source: "$.skuPartNumber"
+    step: fetch_user_license_details
+    required: true
+    type: string
+    note: "Denormalised SKU name on each user-license row for convenience."
+ 
+  - key: service_plans
+    label: Service Plans (full array)
+    source: "$.servicePlans"
+    step: fetch_user_license_details
+    required: false
+    type: array
+    note: >
+      Full nested array. Each entry contains: servicePlanId, servicePlanName,
+      provisioningStatus, appliesTo. Stored as-is in raw. Flatten to one row
+      per service plan in Silver if per-plan reporting is needed.
+ 
+  - key: service_plan_id
+    label: Service Plan ID
+    source: "$.servicePlans[*].servicePlanId"
+    step: fetch_user_license_details
+    required: false
+    type: string
+    note: "Use when exploding service_plans array to one row per plan in Silver."
+ 
+  - key: service_plan_name
+    label: Service Plan Name
+    source: "$.servicePlans[*].servicePlanName"
+    step: fetch_user_license_details
+    required: false
+    type: string
+    note: "e.g. TEAMS1, EXCHANGE_S_ENTERPRISE, SHAREPOINTENTERPRISE, YAMMER_ENTERPRISE."
+ 
+  - key: provisioning_status
+    label: Provisioning Status
+    source: "$.servicePlans[*].provisioningStatus"
+    step: fetch_user_license_details
+    required: false
+    type: string
+    note: "Values: Success | Disabled | PendingInput | PendingActivation | PendingProvisioning. Disabled = feature intentionally off for this user."
+ 
+  - key: applies_to
+    label: Applies To
+    source: "$.servicePlans[*].appliesTo"
+    step: fetch_user_license_details
+    required: false
+    type: string
+    note: "User = per-user feature toggle; Company = tenant-level feature (same for all users)."
+ 
+# ── Landing ───────────────────────────────────────────────────────────────────
+# Replaces bronze / silver / gold sections.
+# The engine writes one JSON file per data-producing step plus a _manifest.json.
+#
+# Resolved at runtime from the platform context supplied to run_connector():
+#   platform.raw_bucket         — S3 bucket name (set by infrastructure, not the manifest)
+#   platform.client_s3_base_path — per-client prefix, e.g. "acme_corp/Datasources"
+#
+# Template variables available in key_pattern:
+#   {platform.raw_bucket}            S3 bucket (also set in `bucket` field)
+#   {platform.client_s3_base_path}   per-client S3 prefix
+#   {category}                       from manifest top-level (Licensing)
+#   {display_name}                   from manifest top-level (Microsoft 365 (Graph))
+#   {source_id}                      microsoft_365
+#   {run_date}                       UTC date of this run, e.g. 2026-05-28
+#   {run_id}                         unique run UUID
+#   {step_id}                        e.g. fetch_subscribed_skus, fetch_users, user_license_details
+#
+# Files written for this connector (file_per: step):
+#   …/fetch_subscribed_skus.json       — tenant SKU inventory
+#   …/fetch_users.json                 — user directory with top-level license summary
+#   …/user_license_details.json        — per-user service plan detail (flat_join output)
+#   …/_manifest.json                   — run metadata + file index (always written)
+#
+# Example resolved S3 path:
+#   s3://<raw_bucket>/<client_s3_base_path>/Licensing/Microsoft_365_Graph/
+#       raw/microsoft_365/2026-05-28/fetch_subscribed_skus.json
+landing:
+  type: s3
+  bucket: "{platform.raw_bucket}"
+  key_pattern: "{platform.client_s3_base_path}/{category}/{display_name}/raw/{source_id}/{run_date}/{step_id}.json"
+  format: json
+  file_per: step
+  write_mode: overwrite

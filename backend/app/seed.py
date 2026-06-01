@@ -344,8 +344,30 @@ def _sentinelone_landing_payload() -> dict:
     }
 
 
+def _ensure_bucket(s3, bucket: str) -> None:
+    """Create the landing bucket if it does not exist (idempotent).
+
+    Guards against the LocalStack bootstrap creating a differently-named bucket
+    than the app's configured S3_BUCKET. us-east-1 must not send a
+    LocationConstraint; every other region must.
+    """
+    try:
+        s3.head_bucket(Bucket=bucket)
+        return
+    except ClientError:
+        pass
+    if settings.AWS_REGION == "us-east-1":
+        s3.create_bucket(Bucket=bucket)
+    else:
+        s3.create_bucket(
+            Bucket=bucket,
+            CreateBucketConfiguration={"LocationConstraint": settings.AWS_REGION},
+        )
+
+
 def seed_landing_files(msp_id, datasources: dict[str, Datasource]) -> None:
     s3 = localstack_client("s3")
+    _ensure_bucket(s3, settings.S3_BUCKET)
     files = [
         (datasources["Datto RMM"].id, _datto_landing_payload()),
         (datasources["SentinelOne"].id, _sentinelone_landing_payload()),
@@ -377,7 +399,12 @@ async def main() -> None:
         await seed_job_runs(session, msp.id, datasources)
         await session.commit()
 
-        seed_landing_files(msp.id, datasources)
+        # Demo landing files are best-effort: a missing/unreachable S3 (LocalStack)
+        # must never block the backend from starting. DB seeding above stays strict.
+        try:
+            seed_landing_files(msp.id, datasources)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[seed] WARNING: skipped S3 landing-file seed ({type(exc).__name__}): {exc}")
 
     # seed_connector_registry()
     print("Database seeded successfully")

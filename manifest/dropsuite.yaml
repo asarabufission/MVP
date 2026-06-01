@@ -1,0 +1,214 @@
+schema_version: 1.0
+source_id: dropsuite_v1
+display_name: Dropsuite
+category: Licensing
+scope_default: Client-level
+
+# ── Credential Schema ────────────────────────────────────────────────────────
+# Dropsuite authenticates with two static tokens sent as request headers.
+# Both are persisted only in AWS Secrets Manager — never in the DB, logs, or
+# frontend state.
+credential_schema:
+  - key: DROPSUITE_API_URL
+    label: API Base URL
+    type: url
+    required: true
+    default: https://dropsuite.us
+  - key: DROPSUITE_RESELLER_TOKEN
+    label: Reseller Token
+    type: secret
+    required: true
+  - key: DROPSUITE_ACCESS_TOKEN
+    label: Access Token
+    type: secret
+    required: true
+
+# ── Auth Strategy ────────────────────────────────────────────────────────────
+# strategy: header_key
+#   No token exchange. The two credential tokens are injected as static headers
+#   on every data request. The engine resolves them once and reuses them.
+auth:
+  strategy: header_key
+  headers:
+    X-Reseller-Token: "{credentials.DROPSUITE_RESELLER_TOKEN}"
+    X-Access-Token: "{credentials.DROPSUITE_ACCESS_TOKEN}"
+  on_failure: abort
+
+# ── Steps ────────────────────────────────────────────────────────────────────
+# Single step. GET /api/users returns a TOP-LEVEL JSON ARRAY of user objects,
+# so there is no response.data_key — the array itself is the row set.
+# No pagination parameters are documented for this endpoint (type: none).
+steps:
+  - id: fetch_users
+    description: >
+      Retrieve all Dropsuite users (backup seats) visible to the reseller +
+      access token pair, including seat counts, storage usage, plan, and
+      organization metadata.
+    method: GET
+    url: "{credentials.DROPSUITE_API_URL}/api/users"
+    pagination:
+      type: none
+    on_failure: abort
+
+# ── Schema Fields ─────────────────────────────────────────────────────────────
+# Canonical field definitions for downstream Silver normalisation.
+# source: JSONPath evaluated against each raw user record from fetch_users.
+# NOTE: reseller_token / authentication_token are intentionally NOT mapped —
+# they are credential echoes, not business data, and must not flow downstream.
+schema_fields:
+  - key: user_id
+    label: User ID
+    source: "$.id"
+    step: fetch_users
+    required: true
+    type: string
+  - key: email
+    label: Email
+    source: "$.email"
+    step: fetch_users
+    required: true
+    type: string
+  - key: organization_id
+    label: Organization ID
+    source: "$.organization_id"
+    step: fetch_users
+    required: true
+    type: integer
+  - key: organization_name
+    label: Organization Name
+    source: "$.organization_name"
+    step: fetch_users
+    required: false
+    type: string
+  - key: plan_id
+    label: Plan ID
+    source: "$.plan_id"
+    step: fetch_users
+    required: false
+    type: string
+  - key: external_id
+    label: External ID
+    source: "$.external_id"
+    step: fetch_users
+    required: false
+    type: string
+  - key: is_business
+    label: Is Business
+    source: "$.is_business"
+    step: fetch_users
+    required: false
+    type: boolean
+  - key: admin
+    label: Is Admin
+    source: "$.admin"
+    step: fetch_users
+    required: false
+    type: boolean
+  - key: customer_deactivated
+    label: Customer Deactivated
+    source: "$.customer_deactivated"
+    step: fetch_users
+    required: false
+    type: boolean
+  - key: login_disabled
+    label: Login Disabled
+    source: "$.login_disabled"
+    step: fetch_users
+    required: false
+    type: boolean
+  - key: flg_suspended
+    label: Suspended
+    source: "$.flg_suspended"
+    step: fetch_users
+    required: false
+    type: boolean
+  - key: archive
+    label: Archive Enabled
+    source: "$.archive"
+    step: fetch_users
+    required: false
+    type: boolean
+  - key: auto_license
+    label: Auto License
+    source: "$.auto_license"
+    step: fetch_users
+    required: false
+    type: boolean
+  - key: seats_used
+    label: Seats Used
+    source: "$.seats_used"
+    step: fetch_users
+    required: false
+    type: integer
+  - key: seats_available
+    label: Seats Available
+    source: "$.seats_available"
+    step: fetch_users
+    required: false
+    type: integer
+  - key: active_seats
+    label: Active Seats
+    source: "$.active_seats"
+    step: fetch_users
+    required: false
+    type: integer
+  - key: deactivated_seats
+    label: Deactivated Seats
+    source: "$.deactivated_seats"
+    step: fetch_users
+    required: false
+    type: integer
+  - key: required_seats
+    label: Required Seats
+    source: "$.required_seats"
+    step: fetch_users
+    required: false
+    type: integer
+  - key: paid_shared_mailboxes
+    label: Paid Shared Mailboxes
+    source: "$.paid_shared_mailboxes"
+    step: fetch_users
+    required: false
+    type: integer
+  - key: free_shared_mailboxes
+    label: Free Shared Mailboxes
+    source: "$.free_shared_mailboxes"
+    step: fetch_users
+    required: false
+    type: integer
+  - key: storage_used
+    label: Storage Used
+    source: "$.storage_used"
+    step: fetch_users
+    required: false
+    type: number
+  - key: storage_available
+    label: Storage Available
+    source: "$.storage_available"
+    step: fetch_users
+    required: false
+    type: number
+  - key: notification_email
+    label: Notification Emails
+    source: "$.notification_email"
+    step: fetch_users
+    required: false
+    type: array
+  - key: backup_summary
+    label: Backup Summary
+    source: "$.backup_summary"
+    step: fetch_users
+    required: false
+    type: object
+
+# ── Landing ───────────────────────────────────────────────────────────────────
+# One raw JSON file:
+#   raw/dropsuite_v1/<client_id>/<run_date>/fetch_users.json
+landing:
+  type: s3
+  bucket: "msp-guardian-mvp"
+  key_pattern: "raw/{source_id}/{client_id}/{run_date}/{step_id}.json"
+  format: json
+  file_per: step
+  write_mode: overwrite
+  include_run_metadata: true
